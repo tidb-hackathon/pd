@@ -565,7 +565,7 @@ func (s *Storage) LoadAllRangeTTL() ([]*pdpb.RangeTTL, error) {
 	// Range is ['gc/ttl/\x00', 'gc/ttl0'). 'ttl0' is the upper bound of all rules because '0' is next char of '/' in
 	// ascii order.
 	nextKey := path.Join(ttlPath, "\x00")
-	endKey := rulesPath + "0"
+	endKey := ttlPath + "0"
 	ttl := make([]*pdpb.RangeTTL, 0, 32)
 	for {
 		keys, values, err := s.LoadRange(nextKey, endKey, minKVRangeLimit)

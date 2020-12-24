@@ -722,9 +722,15 @@ func (s *Server) GetGCSafePoint(ctx context.Context, request *pdpb.GetGCSafePoin
 		return nil, err
 	}
 
+	ttl, err := s.storage.LoadAllRangeTTL()
+	if err != nil {
+		return nil, err
+	}
+
 	return &pdpb.GetGCSafePointResponse{
 		Header:    s.header(),
 		SafePoint: safePoint,
+		Range_TTL: ttl,
 	}, nil
 }
 
