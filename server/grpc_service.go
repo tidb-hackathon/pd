@@ -903,3 +903,61 @@ func (s *Server) incompatibleVersion(tag string) *pdpb.ResponseHeader {
 		Message: msg,
 	})
 }
+
+func (s *Server) AddRangeTTL(ctx context.Context, request *pdpb.AddRangeTTLRequest) (*pdpb.AddRangeTTLResponse, error) {
+	if err := s.validateRequest(request.GetHeader()); err != nil {
+		return nil, err
+	}
+
+	if err := s.storage.AddRangeTTL(request.TTL); err != nil {
+		return nil, err
+	}
+
+	return &pdpb.AddRangeTTLResponse{
+		Header: s.header(),
+	}, nil
+}
+
+func (s *Server) DeleteRangeTTL(ctx context.Context, request *pdpb.DeleteRangeTTLRequest) (*pdpb.DeleteRangeTTLResponse, error) {
+	if err := s.validateRequest(request.GetHeader()); err != nil {
+		return nil, err
+	}
+
+	if err := s.storage.DeleteRangeTTL(request.StartKey, request.EndKey); err != nil {
+		return nil, err
+	}
+
+	return &pdpb.DeleteRangeTTLResponse{
+		Header: s.header(),
+	}, nil
+}
+
+func (s *Server) GetAllRangeTTL(ctx context.Context, request *pdpb.GetAllRangeTTLRequest) (*pdpb.GetAllRangeTTLResponse, error) {
+	if err := s.validateRequest(request.GetHeader()); err != nil {
+		return nil, err
+	}
+
+	if ttl, err := s.storage.LoadAllRangeTTL(); err != nil {
+		return nil, err
+	} else {
+		return &pdpb.GetAllRangeTTLResponse{
+			Header: s.header(),
+			TTL:    ttl,
+		}, nil
+	}
+}
+
+func (s *Server) GetRangeTTL(ctx context.Context, request *pdpb.GetRangeTTLRequest) (*pdpb.GetRangeTTLResponse, error) {
+	if err := s.validateRequest(request.GetHeader()); err != nil {
+		return nil, err
+	}
+
+	if ttl, err := s.storage.LoadRangeTTL(request.StartKey, request.EndKey); err != nil {
+		return nil, err
+	} else {
+		return &pdpb.GetRangeTTLResponse{
+			Header: s.header(),
+			TTL:    ttl,
+		}, nil
+	}
+}

@@ -14,6 +14,7 @@
 package core
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -27,6 +28,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/kvproto/pkg/metapb"
+	"github.com/pingcap/kvproto/pkg/pdpb"
 	"github.com/tikv/pd/pkg/errs"
 	"github.com/tikv/pd/server/kv"
 	"go.etcd.io/etcd/clientv3"
@@ -38,6 +40,7 @@ const (
 	schedulePath               = "schedule"
 	gcPath                     = "gc"
 	rulesPath                  = "rules"
+	ttlPath                    = "gc/ttl"
 	replicationPath            = "replication_mode"
 	componentPath              = "component"
 	customScheduleConfigPath   = "scheduler_config"
@@ -543,4 +546,60 @@ func saveProto(s kv.Base, key string, msg proto.Message) error {
 		return errs.ErrProtoMarshal.Wrap(err).GenWithStackByCause()
 	}
 	return s.Save(key, string(value))
+}
+
+func rangeTTLKey(startKey, endKey []byte) string {
+	return path.Join(ttlPath, hex.EncodeToString(startKey), hex.EncodeToString(endKey))
+}
+
+func (s *Storage) LoadRangeTTL(startKey, endKey []byte) (*pdpb.RangeTTL, error) {
+	ttl := &pdpb.RangeTTL{}
+	if r, e := loadProto(s.Base, rangeTTLKey(startKey, endKey), ttl); !r {
+		return nil, e
+	} else {
+		return ttl, nil
+	}
+}
+
+func (s *Storage) LoadAllRangeTTL() ([]*pdpb.RangeTTL, error) {
+	// Range is ['gc/ttl/\x00', 'gc/ttl0'). 'ttl0' is the upper bound of all rules because '0' is next char of '/' in
+	// ascii order.
+	nextKey := path.Join(ttlPath, "\x00")
+	endKey := rulesPath + "0"
+	ttl := make([]*pdpb.RangeTTL, 0, 32)
+	for {
+		keys, values, err := s.LoadRange(nextKey, endKey, minKVRangeLimit)
+		if err != nil {
+			return nil, err
+		}
+		if len(keys) == 0 {
+			return ttl, nil
+		}
+		for i := range keys {
+			msg := &pdpb.RangeTTL{}
+			err = proto.Unmarshal([]byte(values[i]), msg)
+			if err != nil {
+				return nil, errs.ErrProtoUnmarshal.Wrap(err).GenWithStackByCause()
+			}
+			ttl = append(ttl, msg)
+		}
+		if len(keys) < minKVRangeLimit {
+			return ttl, nil
+		}
+		nextKey = keys[len(keys)-1] + "\x00"
+	}
+	return ttl, nil
+}
+
+func (s *Storage) AddRangeTTL(ttl []*pdpb.RangeTTL) error {
+	for _, t := range ttl {
+		if err := saveProto(s.Base, rangeTTLKey(t.StartKey, t.EndKey), t); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Storage) DeleteRangeTTL(startKey, endKey []byte) error {
+	return s.Remove(rangeTTLKey(startKey, endKey))
 }

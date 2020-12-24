@@ -50,3 +50,5 @@ require (
 )
 
 replace github.com/sirupsen/logrus => github.com/sirupsen/logrus v1.2.0
+
+replace github.com/pingcap/kvproto => github.com/tidb-hackathon/kvproto v0.0.0-20201223082359-0ffb775a24af

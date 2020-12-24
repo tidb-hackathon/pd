@@ -69,6 +69,10 @@ var (
 	cmdDurationUpdateServiceGCSafePoint = cmdDuration.WithLabelValues("update_service_gc_safe_point")
 	cmdDurationScatterRegion            = cmdDuration.WithLabelValues("scatter_region")
 	cmdDurationGetOperator              = cmdDuration.WithLabelValues("get_operator")
+	cmdDurationAddRangeTTL              = cmdDuration.WithLabelValues("add_range_ttl")
+	cmdDurationDeleteRangeTTL           = cmdDuration.WithLabelValues("delete_range_ttl")
+	cmdDurationGetRangeTTL              = cmdDuration.WithLabelValues("get_range_ttl")
+	cmdDurationGetAllRangeTTL           = cmdDuration.WithLabelValues("get_all_range_ttl")
 
 	cmdFailDurationGetRegion                  = cmdFailedDuration.WithLabelValues("get_region")
 	cmdFailDurationTSO                        = cmdFailedDuration.WithLabelValues("tso")

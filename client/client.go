@@ -36,6 +36,12 @@ type Region struct {
 	PendingPeers []*metapb.Peer
 }
 
+type RangeTTL struct {
+	StartKey []byte
+	EndKey   []byte
+	TTL      time.Duration
+}
+
 // Client is a PD (Placement Driver) client.
 // It should not be used after calling Close().
 type Client interface {
@@ -91,6 +97,16 @@ type Client interface {
 	ScatterRegionWithOption(ctx context.Context, regionID uint64, opts ...ScatterRegionOption) error
 	// GetOperator gets the status of operator of the specified region.
 	GetOperator(ctx context.Context, regionID uint64) (*pdpb.GetOperatorResponse, error)
+
+	// Add range ttl
+	AddRangeTTL(ctx context.Context, ttl ...*RangeTTL) error
+	// Delete range ttl
+	DeleteRangeTTL(ctx context.Context, startKey, endKey []byte) error
+	// Get range ttl
+	GetRangeTTL(ctx context.Context, startKey, endKey []byte) (*RangeTTL, error)
+	// Get all range ttl
+	GetAllRangeTTL(ctx context.Context) ([]*RangeTTL, error)
+
 	// Close closes the client.
 	Close()
 }
@@ -743,6 +759,125 @@ func (c *client) GetOperator(ctx context.Context, regionID uint64) (*pdpb.GetOpe
 		Header:   c.requestHeader(),
 		RegionId: regionID,
 	})
+}
+
+func convertRangeTTL(ttl *RangeTTL) *pdpb.RangeTTL {
+	return &pdpb.RangeTTL{
+		StartKey: ttl.StartKey,
+		EndKey:   ttl.EndKey,
+		TTL:      uint64(ttl.TTL.Minutes()),
+	}
+}
+
+func convertRangeTTLSlice(ttl []*RangeTTL) []*pdpb.RangeTTL {
+	pb := make([]*pdpb.RangeTTL, len(ttl))
+	for i, t := range ttl {
+		pb[i] = convertRangeTTL(t)
+	}
+	return pb
+}
+
+func convertToRangeTTL(ttl *pdpb.RangeTTL) *RangeTTL {
+	return &RangeTTL{
+		StartKey: ttl.StartKey,
+		EndKey:   ttl.EndKey,
+		TTL:      time.Duration(uint64(time.Minute) * ttl.TTL),
+	}
+}
+
+func convertToRangeTTLSlice(ttl []*pdpb.RangeTTL) []*RangeTTL {
+	slice := make([]*RangeTTL, len(ttl))
+	for i, t := range ttl {
+		slice[i] = convertToRangeTTL(t)
+	}
+	return slice
+}
+
+func (c *client) AddRangeTTL(ctx context.Context, ttl ...*RangeTTL) error {
+	if span := opentracing.SpanFromContext(ctx); span != nil {
+		span = opentracing.StartSpan("pdclient.AddRangeTTL", opentracing.ChildOf(span.Context()))
+		defer span.Finish()
+	}
+	start := time.Now()
+	defer func() { cmdDurationAddRangeTTL.Observe(time.Since(start).Seconds()) }()
+
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+	resp, err := c.leaderClient().AddRangeTTL(ctx, &pdpb.AddRangeTTLRequest{
+		Header: c.requestHeader(),
+		TTL:    convertRangeTTLSlice(ttl),
+	})
+	if resp.Header.GetError() != nil {
+		return errors.Errorf("Add range ttl failed: %s", resp.Header.GetError().String())
+	}
+	return err
+}
+
+func (c *client) DeleteRangeTTL(ctx context.Context, startKey, endKey []byte) error {
+	if span := opentracing.SpanFromContext(ctx); span != nil {
+		span = opentracing.StartSpan("pdclient.DeleteRangeTTL", opentracing.ChildOf(span.Context()))
+		defer span.Finish()
+	}
+	start := time.Now()
+	defer func() { cmdDurationDeleteRangeTTL.Observe(time.Since(start).Seconds()) }()
+
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+	resp, err := c.leaderClient().DeleteRangeTTL(ctx, &pdpb.DeleteRangeTTLRequest{
+		Header:   c.requestHeader(),
+		StartKey: startKey,
+		EndKey:   endKey,
+	})
+	if resp.Header.GetError() != nil {
+		return errors.Errorf("Delete range ttl failed: %s", resp.Header.GetError().String())
+	}
+	return err
+}
+
+func (c *client) GetRangeTTL(ctx context.Context, startKey, endKey []byte) (*RangeTTL, error) {
+	if span := opentracing.SpanFromContext(ctx); span != nil {
+		span = opentracing.StartSpan("pdclient.GetRangeTTL", opentracing.ChildOf(span.Context()))
+		defer span.Finish()
+	}
+	start := time.Now()
+	defer func() { cmdDurationGetRangeTTL.Observe(time.Since(start).Seconds()) }()
+
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+	resp, err := c.leaderClient().GetRangeTTL(ctx, &pdpb.GetRangeTTLRequest{
+		Header:   c.requestHeader(),
+		StartKey: startKey,
+		EndKey:   endKey,
+	})
+	if resp.Header.GetError() != nil {
+		return nil, errors.Errorf("Get range ttl failed: %s", resp.Header.GetError().String())
+	}
+	if err != nil {
+		return nil, err
+	}
+	return convertToRangeTTL(resp.TTL), nil
+}
+
+func (c *client) GetAllRangeTTL(ctx context.Context) ([]*RangeTTL, error) {
+	if span := opentracing.SpanFromContext(ctx); span != nil {
+		span = opentracing.StartSpan("pdclient.GetAllRangeTTL", opentracing.ChildOf(span.Context()))
+		defer span.Finish()
+	}
+	start := time.Now()
+	defer func() { cmdDurationGetAllRangeTTL.Observe(time.Since(start).Seconds()) }()
+
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+	resp, err := c.leaderClient().GetAllRangeTTL(ctx, &pdpb.GetAllRangeTTLRequest{
+		Header: c.requestHeader(),
+	})
+	if resp.Header.GetError() != nil {
+		return nil, errors.Errorf("Get all range ttl failed: %s", resp.Header.GetError().String())
+	}
+	if err != nil {
+		return nil, err
+	}
+	return convertToRangeTTLSlice(resp.TTL), nil
 }
 
 func (c *client) requestHeader() *pdpb.RequestHeader {
