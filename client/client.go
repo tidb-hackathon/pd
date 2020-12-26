@@ -37,9 +37,11 @@ type Region struct {
 }
 
 type RangeTTL struct {
-	StartKey []byte
-	EndKey   []byte
-	TTL      time.Duration
+	StartKey      []byte
+	EndKey        []byte
+	TTL           time.Duration
+	AddGCInterval bool
+	UserData      []byte
 }
 
 // Client is a PD (Placement Driver) client.
@@ -763,9 +765,11 @@ func (c *client) GetOperator(ctx context.Context, regionID uint64) (*pdpb.GetOpe
 
 func convertRangeTTL(ttl *RangeTTL) *pdpb.RangeTTL {
 	return &pdpb.RangeTTL{
-		StartKey: ttl.StartKey,
-		EndKey:   ttl.EndKey,
-		TTL:      uint64(ttl.TTL.Minutes()),
+		StartKey:      ttl.StartKey,
+		EndKey:        ttl.EndKey,
+		TTL:           uint64(ttl.TTL.Minutes()),
+		AddGcInterval: ttl.AddGCInterval,
+		UserData:      ttl.UserData,
 	}
 }
 
@@ -779,9 +783,11 @@ func convertRangeTTLSlice(ttl []*RangeTTL) []*pdpb.RangeTTL {
 
 func convertToRangeTTL(ttl *pdpb.RangeTTL) *RangeTTL {
 	return &RangeTTL{
-		StartKey: ttl.StartKey,
-		EndKey:   ttl.EndKey,
-		TTL:      time.Duration(uint64(time.Minute) * ttl.TTL),
+		StartKey:      ttl.StartKey,
+		EndKey:        ttl.EndKey,
+		TTL:           time.Duration(uint64(time.Minute) * ttl.TTL),
+		AddGCInterval: ttl.AddGcInterval,
+		UserData:      ttl.UserData,
 	}
 }
 
