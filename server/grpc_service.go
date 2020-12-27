@@ -727,6 +727,17 @@ func (s *Server) GetGCSafePoint(ctx context.Context, request *pdpb.GetGCSafePoin
 		return nil, err
 	}
 
+	var gcInterval uint64
+	for _, t := range ttl {
+		if t.AddGcInterval {
+			if gcInterval == 0 {
+				gcInterval = safePoint - s.storage.LoadGCLastSafePoint()
+				gcInterval = ((gcInterval >> 18) + 59999) / 60000 // This would go to pd client so that it could be shared between PD and TiKV client
+			}
+			t.TTL += gcInterval
+		}
+	}
+
 	return &pdpb.GetGCSafePointResponse{
 		Header:    s.header(),
 		SafePoint: safePoint,
@@ -762,7 +773,7 @@ func (s *Server) UpdateGCSafePoint(ctx context.Context, request *pdpb.UpdateGCSa
 
 	// Only save the safe point if it's greater than the previous one
 	if newSafePoint > oldSafePoint {
-		if err := s.storage.SaveGCSafePoint(newSafePoint); err != nil {
+		if err := s.storage.SaveGCSafePoint(oldSafePoint, newSafePoint); err != nil {
 			return nil, err
 		}
 		log.Info("updated gc safe point",

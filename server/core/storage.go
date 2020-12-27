@@ -390,15 +390,33 @@ func (s *Storage) Close() error {
 }
 
 // SaveGCSafePoint saves new GC safe point to storage.
-func (s *Storage) SaveGCSafePoint(safePoint uint64) error {
-	key := path.Join(gcPath, "safe_point")
-	value := strconv.FormatUint(safePoint, 16)
+func (s *Storage) SaveGCSafePoint(lastSafePoint, safePoint uint64) error {
+	key := path.Join(gcPath, "last_safe_point")
+	value := strconv.FormatUint(lastSafePoint, 16)
+	// ignore error when storing last safe point
+	s.Save(key, value)
+	key = path.Join(gcPath, "safe_point")
+	value = strconv.FormatUint(safePoint, 16)
 	return s.Save(key, value)
 }
 
 // LoadGCSafePoint loads current GC safe point from storage.
 func (s *Storage) LoadGCSafePoint() (uint64, error) {
-	key := path.Join(gcPath, "safe_point")
+	return s.loadSafePoint("safe_point")
+}
+
+// LoadGCLastSafePoint loads last GC safe point from storage.
+func (s *Storage) LoadGCLastSafePoint() uint64 {
+	if safePoint, err := s.loadSafePoint("last_safe_point"); err != nil {
+		return 0
+	} else {
+		return safePoint
+	}
+}
+
+// loadSafePoint loads safe point from storage.
+func (s *Storage) loadSafePoint(name string) (uint64, error) {
+	key := path.Join(gcPath, name)
 	value, err := s.Load(key)
 	if err != nil {
 		return 0, err
