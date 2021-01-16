@@ -727,21 +727,29 @@ func (s *Server) GetGCSafePoint(ctx context.Context, request *pdpb.GetGCSafePoin
 		return nil, err
 	}
 
+	physicalShiftBits := 18
+
 	var gcInterval uint64
 	for _, t := range ttl {
 		if t.AddGcInterval {
 			if gcInterval == 0 {
 				gcInterval = safePoint - s.storage.LoadGCLastSafePoint()
-				gcInterval = ((gcInterval >> 18) + 59999) / 60000 // This would go to pd client so that it could be shared between PD and TiKV client
+				gcInterval = ((gcInterval >> physicalShiftBits) + 59999) / 60000 // This would go to pd client so that it could be shared between PD and TiKV client
 			}
 			t.TTL += gcInterval
 		}
+	}
+
+	now, err := s.tso.GetRespTS(1)
+	if err != nil {
+		return nil, err
 	}
 
 	return &pdpb.GetGCSafePointResponse{
 		Header:    s.header(),
 		SafePoint: safePoint,
 		Range_TTL: ttl,
+		Now:       uint64((now.Physical << physicalShiftBits) + now.Logical),
 	}, nil
 }
 
